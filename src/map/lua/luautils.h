@@ -307,6 +307,20 @@ namespace luautils
     uint16 SelectDailyItem(CLuaBaseEntity* PLuaBaseEntity, uint8 dial);
 
     void OnPlayerEmote(CCharEntity* PChar, Emote EmoteID);
+
+    int32 CampaignHasBattle(lua_State* L);
+    int32 CampaignSetBattle(lua_State* L);
+    int32 CampaignGetRegionControl(lua_State* L);
+    int32 CampaignSetRegionControl(lua_State* L);
+    int32 CampaignModifyFortification(lua_State* L);
+    int32 CampaignModifyResource(lua_State* L);
+    int32 CampaignModifyMaxFortification(lua_State* L);
+    int32 CampaignModifyMaxResource(lua_State* L);
+    int32 CampaignModifyInfluence(lua_State* L);
+    int32 CampaignModifyReconnaissance(lua_State* L);
+    int32 CampaignModifyMorale(lua_State* L);
+    int32 CampaignModifyProsperity(lua_State* L);
+
 }; // namespace luautils
 
-#endif //- _LUAUTILS_H -
+#endif // _LUAUTILS_H -
