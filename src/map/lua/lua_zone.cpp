@@ -21,9 +21,9 @@
 
 #include "common/showmsg.h"
 
-#include "../region.h"
-
+#include "../campaign_system.h"
 #include "../entities/charentity.h"
+#include "../region.h"
 #include "../zone.h"
 #include "lua_baseentity.h"
 #include "lua_zone.h"
