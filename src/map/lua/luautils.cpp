@@ -223,6 +223,8 @@ namespace luautils
         set_function("GetCachedInstanceScript", &luautils::GetCachedInstanceScript);
         
 
+        lua.set_function("SendCampaignUpdate", [](CLuaBaseEntity* entity) { campaign::SendUpdate((CCharEntity*)entity->GetBaseEntity()); });
+
         // Register Sol Bindings
         CLuaAbility::Register();
         CLuaAction::Register();
