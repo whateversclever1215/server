@@ -32,6 +32,11 @@
 #include <cstdlib>
 #include <cstring>
 
+#ifdef WIN32 // For stack trace tools
+#include <DbgHelp.h>
+#include <Windows.h>
+#endif
+
 #ifndef _WIN32
 #include <unistd.h>
 #endif
@@ -86,7 +91,7 @@ sigfunc* compat_signal(int signo, sigfunc* func)
 
 /************************************************************************
  *                                                                       *
- *  CORE : Magical backtrace dump procedure                              *
+ *  CORE : Magical backtrace dump procedure (Linux + gdb)                *
  *                                                                       *
  ************************************************************************/
 
@@ -142,6 +147,116 @@ static void dump_backtrace()
     }
 #endif
 }
+
+/************************************************************************
+ *                                                                       *
+ *  CORE : Magical backtrace dump procedure (Windows)                    *
+ *                                                                       *
+ ************************************************************************/
+
+#ifdef WIN32
+// https://stackoverflow.com/a/50208684
+// From MSDN.WhiteKnight
+LONG WINAPI TopLevelExceptionHandler(PEXCEPTION_POINTERS pExceptionInfo)
+{
+    ShowFatalError("Exception 0x%x occured!", pExceptionInfo->ExceptionRecord->ExceptionCode);
+
+    CONTEXT* ctx = pExceptionInfo->ContextRecord;
+
+    BOOL    result;
+    HANDLE  process;
+    HANDLE  thread;
+    HMODULE hModule;
+
+    STACKFRAME64 stack;
+    ULONG        frame;
+    DWORD64      displacement;
+
+    DWORD            disp;
+    IMAGEHLP_LINE64* line;
+
+    char         buffer[sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(TCHAR)];
+    char         name[256];
+    char         module[256];
+    PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)buffer;
+
+    memset(&stack, 0, sizeof(STACKFRAME64));
+
+    process      = GetCurrentProcess();
+    thread       = GetCurrentThread();
+    displacement = 0;
+#if !defined(_M_AMD64)
+    stack.AddrPC.Offset    = (*ctx).Eip;
+    stack.AddrPC.Mode      = AddrModeFlat;
+    stack.AddrStack.Offset = (*ctx).Esp;
+    stack.AddrStack.Mode   = AddrModeFlat;
+    stack.AddrFrame.Offset = (*ctx).Ebp;
+    stack.AddrFrame.Mode   = AddrModeFlat;
+#endif
+
+    SymInitialize(process, NULL, TRUE); // load symbols
+
+    for (frame = 0;; frame++)
+    {
+        // get next call from stack
+        result = StackWalk64(
+#if defined(_M_AMD64)
+            IMAGE_FILE_MACHINE_AMD64
+#else
+            IMAGE_FILE_MACHINE_I386
+#endif
+            ,
+            process,
+            thread,
+            &stack,
+            ctx,
+            NULL,
+            SymFunctionTableAccess64,
+            SymGetModuleBase64,
+            NULL);
+
+        if (!result)
+        {
+            break;
+        }
+
+        // get symbol name for address
+        pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+        pSymbol->MaxNameLen   = MAX_SYM_NAME;
+        SymFromAddr(process, (ULONG64)stack.AddrPC.Offset, &displacement, pSymbol);
+
+        line               = (IMAGEHLP_LINE64*)malloc(sizeof(IMAGEHLP_LINE64));
+        line->SizeOfStruct = sizeof(IMAGEHLP_LINE64);
+
+        // try to get line
+        if (SymGetLineFromAddr64(process, stack.AddrPC.Offset, &disp, line))
+        {
+            ShowStacktrace("\tat %s in %s: line: %lu: address: 0x%0X", pSymbol->Name, line->FileName, line->LineNumber, pSymbol->Address);
+        }
+        else
+        {
+            // failed to get line
+            ShowStacktrace("\tat %s, address 0x%0X.", pSymbol->Name, pSymbol->Address);
+            hModule = NULL;
+            lstrcpyA(module, "");
+            GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                              (LPCTSTR)(stack.AddrPC.Offset), &hModule);
+
+            // at least print module name
+            if (hModule != NULL)
+            {
+                GetModuleFileNameA(hModule, module, 256);
+            }
+
+            ShowStacktrace("in %s", module);
+        }
+
+        free(line);
+        line = NULL;
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+#endif // WIN32
 
 /************************************************************************
  *																		*
@@ -235,6 +350,10 @@ void usercheck()
 #ifndef DEFINE_OWN_MAIN
 int main(int argc, char** argv)
 {
+#ifdef WIN32
+    AddVectoredExceptionHandler(1, TopLevelExceptionHandler);
+#endif
+
     { // initialize program arguments
         char* p1 = SERVER_NAME = argv[0];
         char* p2               = p1;
