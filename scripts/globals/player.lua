@@ -130,6 +130,7 @@ local function CharCreate(player)
     player:setCharVar("TutorialProgress", 1) -- Has not started tutorial
     player:setCharVar("EinherjarIntro", 1) -- Has not seen Einherjar intro
     player:setNewPlayer(true) -- apply new player flag
+	player:addLinkpearl("WelcomeHome", true)
 end
 
 -----------------------------------
